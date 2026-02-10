@@ -208,28 +208,32 @@ async function doSummarize() {{
   sumBtn.style.pointerEvents = 'none';
   status.textContent = 'Summarizing…';
 
-  /* Call Google Gemini API directly */
+  /* Call Google Gemini API — try multiple models for availability */
   const prompt = "Summarize the following meeting notes concisely. Keep full context and key points. Be brief and clear. Output only the summary, no preamble.\\n\\n" + lines.join('\\n');
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${{API_KEY}}`;
+  const models = ["gemma-3-4b-it", "gemini-2.0-flash-lite", "gemini-2.0-flash"];
 
-  try {{
-    const r = await fetch(url, {{
-      method: "POST",
-      headers: {{ "Content-Type": "application/json" }},
-      body: JSON.stringify({{
-        contents: [{{ parts: [{{ text: prompt }}] }}]
-      }})
-    }});
-    const d = await r.json();
-    if (d.candidates && d.candidates[0]) {{
-      summaryText = d.candidates[0].content.parts[0].text.trim();
-      showSummary(summaryText);
-    }} else {{
-      showSummary('Could not generate summary. Please try again.');
-    }}
-  }} catch(e) {{
-    showSummary('Error: ' + e.message);
+  for (const model of models) {{
+    try {{
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${{model}}:generateContent?key=${{API_KEY}}`;
+      const r = await fetch(url, {{
+        method: "POST",
+        headers: {{ "Content-Type": "application/json" }},
+        body: JSON.stringify({{ contents: [{{ parts: [{{ text: prompt }}] }}] }})
+      }});
+      if (r.status === 429) continue;
+      const d = await r.json();
+      if (d.candidates && d.candidates[0]) {{
+        summaryText = d.candidates[0].content.parts[0].text.trim();
+        showSummary(summaryText);
+        sumBtn.style.opacity = '1';
+        sumBtn.style.pointerEvents = 'auto';
+        status.textContent = on ? 'Listening…' : 'Tap to start';
+        return;
+      }}
+    }} catch(e) {{ continue; }}
   }}
+
+  showSummary('Could not generate summary. Please try again.');
   sumBtn.style.opacity = '1';
   sumBtn.style.pointerEvents = 'auto';
   status.textContent = on ? 'Listening…' : 'Tap to start';
