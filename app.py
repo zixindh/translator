@@ -60,7 +60,35 @@ components.html("""
     to   { opacity:1; transform:translateY(0); }
   }
 
-  #log { max-height:72vh; overflow-y:auto; padding-bottom:1rem; }
+  #log { max-height:65vh; overflow-y:auto; padding-bottom:0.5rem; }
+
+  /* Export button */
+  #exportBtn {
+    display:none; margin:0.5rem auto 0; padding:0.4rem 1.2rem;
+    background:#4A90D9; color:#fff; border:none; border-radius:6px;
+    font-size:0.8rem; font-weight:600; cursor:pointer;
+    transition:background 0.2s;
+  }
+  #exportBtn:hover { background:#3a7bc8; }
+
+  /* Export card rendered offscreen for download */
+  .export-card {
+    width:560px; padding:2rem 2.5rem; background:#fff;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  .export-card .ex-title {
+    font-size:1.1rem; font-weight:700; color:#1a1a2e;
+    margin-bottom:1.2rem; display:flex; align-items:center; gap:0.4rem;
+  }
+  .export-card .ex-line {
+    background:#f7f8fa; border-left:3px solid #4A90D9;
+    border-radius:5px; padding:0.55rem 0.9rem; margin:0.3rem 0;
+    font-size:0.95rem; line-height:1.5; color:#1a1a2e;
+  }
+  .export-card .ex-footer {
+    margin-top:1.2rem; text-align:right;
+    font-size:0.7rem; color:#aaa; letter-spacing:0.02em;
+  }
 </style>
 
 <div class="header"><span style="font-size:1.3rem">🌐</span><h3>Translator</h3></div>
@@ -68,6 +96,7 @@ components.html("""
 <div id="status">Tap to start</div>
 <div id="live"></div>
 <div id="log"></div>
+<button id="exportBtn" onclick="exportCard()">Export</button>
 
 <script>
 const mic    = document.getElementById('mic');
@@ -99,13 +128,43 @@ async function toEN(text) {
   }
 }
 
+const exportBtn = document.getElementById('exportBtn');
+const lines = [];  /* store all finalized texts */
+
 /* Append a finalized English line */
 function addLine(text) {
+  lines.push(text);
   const el = document.createElement('div');
   el.className = 'line';
   el.textContent = text;
   log.appendChild(el);
   log.scrollTop = log.scrollHeight;
+  exportBtn.style.display = 'block';
+}
+
+/* Export as image card */
+async function exportCard() {
+  /* Build offscreen card */
+  const card = document.createElement('div');
+  card.className = 'export-card';
+  card.innerHTML =
+    '<div class="ex-title"><span>🌐</span> Translator</div>' +
+    lines.map(l => '<div class="ex-line">' + l + '</div>').join('') +
+    '<div class="ex-footer">' + new Date().toLocaleString() + '</div>';
+  document.body.appendChild(card);
+
+  /* Render to canvas via html2canvas */
+  const script = document.createElement('script');
+  script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+  script.onload = async () => {
+    const canvas = await html2canvas(card, { scale: 2, backgroundColor: '#ffffff' });
+    document.body.removeChild(card);
+    const a = document.createElement('a');
+    a.download = 'translator-' + Date.now() + '.png';
+    a.href = canvas.toDataURL('image/png');
+    a.click();
+  };
+  document.body.appendChild(script);
 }
 
 /* Build speech recognition instance */
