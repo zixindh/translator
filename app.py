@@ -1,5 +1,9 @@
-"""Live Chinese → English meeting notes. Streaming transcription via Web Speech API."""
+"""Live Chinese → English meeting notes. Streaming transcription via Web Speech API.
+   Summarization via OpenRouter free model (server-side)."""
 
+import os
+import json
+import requests
 import streamlit as st
 import streamlit.components.v1 as components
 
@@ -12,33 +16,61 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Entire UI lives in a single client-side HTML component.
-# Speech recognition + translation happen in the browser — zero server round-trips.
+# --- Server-side summarization handler ---
+API_KEY = st.secrets.get("CURSOR_API_KEY", os.environ.get("CURSOR_API_KEY", ""))
+
+def summarize(text: str) -> str:
+    """Summarize text using OpenRouter free model."""
+    try:
+        r = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"},
+            json={
+                "model": "google/gemini-2.0-flash-exp:free",
+                "messages": [
+                    {"role": "system", "content": "Summarize the following meeting notes concisely. Keep full context and key points. Be brief and clear. Output only the summary, no preamble."},
+                    {"role": "user", "content": text}
+                ],
+                "max_tokens": 512
+            },
+            timeout=15
+        )
+        return r.json()["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        return f"Error: {e}"
+
+# Handle summarization request from client via query params
+params = st.query_params
+if "summarize_text" in params:
+    result = summarize(params["summarize_text"])
+    # Return result as JSON via a hidden element the JS can read
+    st.markdown(f'<div id="summary-result" style="display:none">{result}</div>', unsafe_allow_html=True)
+
+# Client-side HTML component
 components.html("""
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
 
-  /* Layout: header top, log middle, mic pinned bottom */
   .wrap { display:flex; flex-direction:column; height:640px; }
 
-  /* Header with title left, export icon right */
+  /* Header: title left, action icons right */
   .bar {
     display:flex; align-items:center; justify-content:space-between;
     padding:0 0.2rem 0.6rem; flex-shrink:0;
   }
   .bar h3 { font-size:1.15rem; color:#1a1a2e; display:flex; align-items:center; gap:0.4rem; }
-  #exportBtn {
+  .actions { display:flex; gap:0.3rem; }
+  .actions button {
     display:none; background:none; border:none; cursor:pointer;
     color:#999; transition:color 0.2s; padding:4px;
   }
-  #exportBtn:hover { color:#4A90D9; }
-  #exportBtn svg { width:20px; height:20px; }
+  .actions button:hover { color:#4A90D9; }
+  .actions button svg { width:20px; height:20px; }
 
   /* Scrollable log area */
   #log { flex:1; overflow-y:auto; padding:0 0.2rem 0.5rem; }
 
-  /* Finalized entries */
   .line {
     background:#f7f8fa; border-left:3px solid #4A90D9;
     border-radius:0; padding:0.5rem 0.9rem; margin:0;
@@ -50,13 +82,24 @@ components.html("""
     to   { opacity:1; transform:translateY(0); }
   }
 
-  /* Live interim text */
+  /* Summary card */
+  .summary {
+    background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+    border-left:3px solid #6366f1;
+    padding:0.7rem 1rem; margin:0.5rem 0 0.3rem;
+    font-size:0.95rem; line-height:1.6; color:#1e1b4b;
+    border-radius:6px;
+  }
+  .summary .s-label {
+    font-size:0.65rem; font-weight:700; text-transform:uppercase;
+    letter-spacing:0.06em; color:#6366f1; margin-bottom:0.3rem;
+  }
+
   #live {
     color:#999; font-style:italic; font-size:0.95rem;
     padding:0 0.2rem; min-height:1rem; flex-shrink:0;
   }
 
-  /* Bottom mic area */
   .bottom { flex-shrink:0; text-align:center; padding:0.6rem 0 0.3rem; }
   #mic {
     width:52px; height:52px; border-radius:50%; border:none;
@@ -76,7 +119,6 @@ components.html("""
   }
   #status { font-size:0.65rem; color:#aaa; margin-top:0.3rem; letter-spacing:0.03em; }
 
-  /* Export card (offscreen for image render) */
   .export-card {
     width:560px; padding:2rem 2.5rem; background:#fff;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -90,30 +132,40 @@ components.html("""
     border-radius:0; padding:0.45rem 0.9rem; margin:0;
     font-size:0.95rem; line-height:1.5; color:#1a1a2e;
   }
+  .export-card .ex-summary {
+    background:#eef2ff; border-left:3px solid #6366f1;
+    border-radius:4px; padding:0.6rem 0.9rem; margin:0.6rem 0 0;
+    font-size:0.9rem; line-height:1.5; color:#1e1b4b;
+  }
   .export-card .ex-footer {
-    margin-top:1rem; text-align:right;
-    font-size:0.7rem; color:#aaa;
+    margin-top:1rem; text-align:right; font-size:0.7rem; color:#aaa;
   }
 </style>
 
 <div class="wrap">
-  <!-- Top bar: title + export -->
   <div class="bar">
     <h3><span>🌐</span> Translator</h3>
-    <button id="exportBtn" onclick="exportCard()" title="Export as image">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-        <polyline points="7 10 12 15 17 10"/>
-        <line x1="12" y1="15" x2="12" y2="3"/>
-      </svg>
-    </button>
+    <div class="actions">
+      <!-- Summarize icon (sparkle/wand) -->
+      <button id="sumBtn" onclick="doSummarize()" title="Summarize">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8z"/>
+        </svg>
+      </button>
+      <!-- Export icon -->
+      <button id="exportBtn" onclick="exportCard()" title="Export as image">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+      </button>
+    </div>
   </div>
 
-  <!-- Scrollable transcript log -->
   <div id="log"></div>
   <div id="live"></div>
 
-  <!-- Bottom mic -->
   <div class="bottom">
     <button id="mic" onclick="toggle()">
       <svg viewBox="0 0 24 24" fill="currentColor">
@@ -131,12 +183,14 @@ const mic    = document.getElementById('mic');
 const status = document.getElementById('status');
 const live   = document.getElementById('live');
 const log    = document.getElementById('log');
+const exportBtn = document.getElementById('exportBtn');
+const sumBtn = document.getElementById('sumBtn');
 let on = false, rec;
+const lines = [];
+let summaryText = '';
 
-/* Detect Chinese characters */
 const hasCN = t => /[\u4e00-\u9fff]/.test(t);
 
-/* Translate Chinese → English via Google free endpoint, MyMemory fallback */
 async function toEN(text) {
   if (!hasCN(text)) return text;
   try {
@@ -156,10 +210,11 @@ async function toEN(text) {
   }
 }
 
-const exportBtn = document.getElementById('exportBtn');
-const lines = [];  /* store all finalized texts */
+function showBtns() {
+  exportBtn.style.display = 'block';
+  sumBtn.style.display = 'block';
+}
 
-/* Append a finalized English line */
 function addLine(text) {
   lines.push(text);
   const el = document.createElement('div');
@@ -167,19 +222,60 @@ function addLine(text) {
   el.textContent = text;
   log.appendChild(el);
   log.scrollTop = log.scrollHeight;
-  exportBtn.style.display = 'block';
+  showBtns();
 }
 
-/* Export: render image → open in new tab.
-   iPhone: long-press the image → "Add to Photos".
-   Desktop: right-click → "Save image as". */
+function showSummary(text) {
+  /* Remove old summary if any */
+  const old = log.querySelector('.summary');
+  if (old) old.remove();
+  const el = document.createElement('div');
+  el.className = 'summary';
+  el.innerHTML = '<div class="s-label">Summary</div>' + text;
+  log.appendChild(el);
+  log.scrollTop = log.scrollHeight;
+}
+
+/* Summarize via parent Streamlit server */
+async function doSummarize() {
+  if (!lines.length) return;
+  sumBtn.style.opacity = '0.4';
+  sumBtn.style.pointerEvents = 'none';
+  status.textContent = 'Summarizing…';
+
+  try {
+    /* Call Streamlit app with query param — triggers server-side summarization */
+    const base = window.location.ancestorOrigins?.[0] || window.parent.location.origin;
+    const url = base + '/?summarize_text=' + encodeURIComponent(lines.join('\\n'));
+    const r = await fetch(url);
+    const html = await r.text();
+
+    /* Extract result from hidden div */
+    const match = html.match(/id="summary-result"[^>]*>([\\s\\S]*?)<\\/div>/);
+    if (match) {
+      summaryText = match[1].trim();
+      showSummary(summaryText);
+    } else {
+      showSummary('Could not generate summary.');
+    }
+  } catch (e) {
+    showSummary('Error: ' + e.message);
+  }
+
+  sumBtn.style.opacity = '1';
+  sumBtn.style.pointerEvents = 'auto';
+  status.textContent = on ? 'Listening…' : 'Tap to start';
+}
+
+/* Export */
 async function exportCard() {
   const card = document.createElement('div');
   card.className = 'export-card';
-  card.innerHTML =
-    '<div class="ex-title"><span>🌐</span> Translator</div>' +
-    lines.map(l => '<div class="ex-line">' + l + '</div>').join('') +
-    '<div class="ex-footer">' + new Date().toLocaleString() + '</div>';
+  let inner = '<div class="ex-title"><span>🌐</span> Translator</div>' +
+    lines.map(l => '<div class="ex-line">' + l + '</div>').join('');
+  if (summaryText) inner += '<div class="ex-summary"><b>Summary:</b> ' + summaryText + '</div>';
+  inner += '<div class="ex-footer">' + new Date().toLocaleString() + '</div>';
+  card.innerHTML = inner;
   document.body.appendChild(card);
 
   if (!window.html2canvas) {
@@ -195,8 +291,6 @@ async function exportCard() {
   document.body.removeChild(card);
   const dataUrl = canvas.toDataURL('image/png');
 
-  /* Open image in new tab — user can long-press to save to Photos (iPhone)
-     or right-click to save (desktop) */
   const w = window.open('', '_blank');
   w.document.write(
     '<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width">' +
@@ -211,14 +305,14 @@ async function exportCard() {
   w.document.close();
 }
 
-/* Build speech recognition instance */
+/* Speech recognition */
 function makeSR() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { status.textContent = 'Not supported in this browser'; return null; }
   const r = new SR();
   r.continuous = true;
   r.interimResults = true;
-  r.lang = 'zh-CN';   /* recognises Chinese; passes through English fine */
+  r.lang = 'zh-CN';
 
   r.onresult = async e => {
     let interim = '';
@@ -235,7 +329,6 @@ function makeSR() {
     if (interim) live.textContent = interim;
   };
 
-  /* Auto-restart on pause so it keeps listening */
   r.onend = () => { if (on) try { r.start(); } catch {} };
   r.onerror = e => {
     if (e.error === 'no-speech' || e.error === 'aborted') return;
