@@ -1,21 +1,19 @@
-# 🌐 Translator
+# Translator
 
-A lightweight Streamlit web app for quick multilingual translation powered by Google Translate.
+Multilingual translator with text and audio input. Powered by Google Translate (free).
+
+**Live:** [zixin-translator.streamlit.app](https://zixin-translator.streamlit.app)
 
 ## Features
 
 - Auto-detect source language
-- 100+ supported languages
-- Swap source/target with one click
-- Clean, responsive UI
+- 100+ languages
+- Audio input with speech-to-text
+- Clean transcript display
 
-## Run Locally
+## Run
 
 ```bash
 pip install -r requirements.txt
 streamlit run app.py
 ```
-
-## Deploy
-
-Push to GitHub and connect to [Streamlit Community Cloud](https://share.streamlit.io) for free hosting.
