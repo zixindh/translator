@@ -17,7 +17,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- Server-side summarization handler ---
-API_KEY = st.secrets.get("CURSOR_API_KEY", os.environ.get("CURSOR_API_KEY", ""))
+API_KEY = st.secrets.get("OPENROUTER_API_KEY", os.environ.get("OPENROUTER_API_KEY", ""))
 
 def summarize(text: str) -> str:
     """Summarize text using OpenRouter free model."""
@@ -26,7 +26,7 @@ def summarize(text: str) -> str:
             "https://openrouter.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"},
             json={
-                "model": "google/gemini-2.0-flash-exp:free",
+                "model": "openrouter/aurora-alpha",
                 "messages": [
                     {"role": "system", "content": "Summarize the following meeting notes concisely. Keep full context and key points. Be brief and clear. Output only the summary, no preamble."},
                     {"role": "user", "content": text}
@@ -100,7 +100,7 @@ components.html("""
     padding:0 0.2rem; min-height:1rem; flex-shrink:0;
   }
 
-  .bottom { flex-shrink:0; text-align:center; padding:0.6rem 0 0.3rem; }
+  .bottom { flex-shrink:0; text-align:center; padding:0.6rem 0 2.5rem; }
   #mic {
     width:52px; height:52px; border-radius:50%; border:none;
     background:#eee; cursor:pointer; transition:all 0.2s;
