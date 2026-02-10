@@ -41,7 +41,7 @@ components.html("""
   /* Finalized entries */
   .line {
     background:#f7f8fa; border-left:3px solid #4A90D9;
-    border-radius:6px; padding:0.6rem 0.9rem; margin:0.3rem 0;
+    border-radius:0; padding:0.5rem 0.9rem; margin:0;
     font-size:1.05rem; line-height:1.6; color:#1a1a2e;
     animation: fadeIn 0.25s ease;
   }
@@ -87,7 +87,7 @@ components.html("""
   }
   .export-card .ex-line {
     background:#f7f8fa; border-left:3px solid #4A90D9;
-    border-radius:5px; padding:0.5rem 0.9rem; margin:0.25rem 0;
+    border-radius:0; padding:0.45rem 0.9rem; margin:0;
     font-size:0.95rem; line-height:1.5; color:#1a1a2e;
   }
   .export-card .ex-footer {
@@ -170,9 +170,8 @@ function addLine(text) {
   exportBtn.style.display = 'block';
 }
 
-/* Export as image card */
+/* Export as image — uses Web Share API on iPhone (saves to Photos), file download on desktop */
 async function exportCard() {
-  /* Build offscreen card */
   const card = document.createElement('div');
   card.className = 'export-card';
   card.innerHTML =
@@ -181,18 +180,34 @@ async function exportCard() {
     '<div class="ex-footer">' + new Date().toLocaleString() + '</div>';
   document.body.appendChild(card);
 
-  /* Render to canvas via html2canvas */
-  const script = document.createElement('script');
-  script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
-  script.onload = async () => {
-    const canvas = await html2canvas(card, { scale: 2, backgroundColor: '#ffffff' });
-    document.body.removeChild(card);
-    const a = document.createElement('a');
-    a.download = 'translator-' + Date.now() + '.png';
-    a.href = canvas.toDataURL('image/png');
-    a.click();
-  };
-  document.body.appendChild(script);
+  /* Load html2canvas if not already loaded */
+  if (!window.html2canvas) {
+    await new Promise(resolve => {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+      s.onload = resolve;
+      document.body.appendChild(s);
+    });
+  }
+
+  const canvas = await html2canvas(card, { scale: 2, backgroundColor: '#fff' });
+  document.body.removeChild(card);
+
+  /* Convert canvas to blob */
+  const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+  const file = new File([blob], 'translator.png', { type: 'image/png' });
+
+  /* iPhone/mobile: Web Share API opens share sheet → Save Image */
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file] }); return; } catch {}
+  }
+
+  /* Desktop fallback: direct download */
+  const a = document.createElement('a');
+  a.download = 'translator-' + Date.now() + '.png';
+  a.href = URL.createObjectURL(blob);
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 /* Build speech recognition instance */
