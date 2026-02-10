@@ -210,7 +210,7 @@ async function doSummarize() {{
 
   /* Call Google Gemini API — try multiple models for availability */
   const prompt = "Summarize the following meeting notes concisely. Keep full context and key points. Be brief and clear. Output only the summary, no preamble.\\n\\n" + lines.join('\\n');
-  const models = ["gemma-3-4b-it", "gemini-2.0-flash-lite", "gemini-2.0-flash"];
+  const models = ["gemini-2.5-flash"];
 
   for (const model of models) {{
     try {{
