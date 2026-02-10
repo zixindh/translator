@@ -1,6 +1,6 @@
 # Translator
 
-Chinese → English translator. Voice or text input, English output only.
+Live Chinese → English meeting notes. Tap mic, speak, see English in real time.
 
 **Live:** [zixin-translator.streamlit.app](https://zixin-translator.streamlit.app)
 
