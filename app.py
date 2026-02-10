@@ -14,8 +14,8 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Pass API key from secrets into the JS component
-API_KEY = st.secrets.get("OPENROUTER_API_KEY", os.environ.get("OPENROUTER_API_KEY", ""))
+# Pass Gemini API key from secrets into the JS component
+API_KEY = st.secrets.get("GEMINI_API_KEY", os.environ.get("GEMINI_API_KEY", ""))
 
 components.html(f"""
 <style>
@@ -208,45 +208,28 @@ async function doSummarize() {{
   sumBtn.style.pointerEvents = 'none';
   status.textContent = 'Summarizing…';
 
-  /* Try backup first (more available), then primary */
-  const models = ["google/gemma-3n-e4b-it:free", "google/gemma-3-27b-it:free"];
-  const msgs = [
-    {{ role: "system", content: "Summarize the following meeting notes concisely. Keep full context and key points. Be brief and clear. Output only the summary, no preamble." }},
-    {{ role: "user", content: lines.join('\\n') }}
-  ];
-  const hdrs = {{
-    "Authorization": "Bearer " + API_KEY,
-    "Content-Type": "application/json",
-    "HTTP-Referer": window.location.href,
-    "X-Title": "Translator"
-  }};
+  /* Call Google Gemini API directly */
+  const prompt = "Summarize the following meeting notes concisely. Keep full context and key points. Be brief and clear. Output only the summary, no preamble.\\n\\n" + lines.join('\\n');
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${{API_KEY}}`;
 
-  for (const model of models) {{
-    for (let attempt = 0; attempt < 2; attempt++) {{
-      try {{
-        const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {{
-          method: "POST",
-          headers: hdrs,
-          body: JSON.stringify({{ model, messages: msgs, max_tokens: 512 }})
-        }});
-        if (r.status === 429) {{
-          await new Promise(ok => setTimeout(ok, 2000));
-          continue;
-        }}
-        const d = await r.json();
-        if (d.choices && d.choices[0]) {{
-          summaryText = d.choices[0].message.content.trim();
-          showSummary(summaryText);
-          sumBtn.style.opacity = '1';
-          sumBtn.style.pointerEvents = 'auto';
-          status.textContent = on ? 'Listening…' : 'Tap to start';
-          return;
-        }}
-      }} catch(e) {{ break; }}
+  try {{
+    const r = await fetch(url, {{
+      method: "POST",
+      headers: {{ "Content-Type": "application/json" }},
+      body: JSON.stringify({{
+        contents: [{{ parts: [{{ text: prompt }}] }}]
+      }})
+    }});
+    const d = await r.json();
+    if (d.candidates && d.candidates[0]) {{
+      summaryText = d.candidates[0].content.parts[0].text.trim();
+      showSummary(summaryText);
+    }} else {{
+      showSummary('Could not generate summary. Please try again.');
     }}
+  }} catch(e) {{
+    showSummary('Error: ' + e.message);
   }}
-
-  showSummary('Could not generate summary. Please try again.');
   sumBtn.style.opacity = '1';
   sumBtn.style.pointerEvents = 'auto';
   status.textContent = on ? 'Listening…' : 'Tap to start';
