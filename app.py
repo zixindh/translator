@@ -1,5 +1,4 @@
-"""Live Chinese → English meeting notes. Streaming transcription via Web Speech API.
-   Summarization via OpenRouter free model (client-side)."""
+"""Live Chinese → English meeting notes. Voice via Web Speech API, summarization via Gemini."""
 
 import os
 import streamlit as st
@@ -201,39 +200,35 @@ function showSummary(text) {{
   log.scrollTop = log.scrollHeight;
 }}
 
-/* Summarize directly via OpenRouter API from client */
+/* Summarize via Gemini API */
 async function doSummarize() {{
   if (!lines.length) return;
   sumBtn.style.opacity = '0.4';
   sumBtn.style.pointerEvents = 'none';
   status.textContent = 'Summarizing…';
 
-  /* Call Google Gemini API — try multiple models for availability */
   const prompt = "Summarize the following meeting notes concisely. Keep full context and key points. Be brief and clear. Output only the summary, no preamble.\\n\\n" + lines.join('\\n');
-  const models = ["gemini-2.5-flash"];
 
-  for (const model of models) {{
-    try {{
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${{model}}:generateContent?key=${{API_KEY}}`;
-      const r = await fetch(url, {{
+  try {{
+    const r = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${{API_KEY}}`,
+      {{
         method: "POST",
         headers: {{ "Content-Type": "application/json" }},
         body: JSON.stringify({{ contents: [{{ parts: [{{ text: prompt }}] }}] }})
-      }});
-      if (r.status === 429) continue;
-      const d = await r.json();
-      if (d.candidates && d.candidates[0]) {{
-        summaryText = d.candidates[0].content.parts[0].text.trim();
-        showSummary(summaryText);
-        sumBtn.style.opacity = '1';
-        sumBtn.style.pointerEvents = 'auto';
-        status.textContent = on ? 'Listening…' : 'Tap to start';
-        return;
       }}
-    }} catch(e) {{ continue; }}
+    );
+    const d = await r.json();
+    if (d.candidates?.[0]) {{
+      summaryText = d.candidates[0].content.parts[0].text.trim();
+      showSummary(summaryText);
+    }} else {{
+      showSummary('Could not generate summary. Please try again.');
+    }}
+  }} catch(e) {{
+    showSummary('Error: ' + e.message);
   }}
 
-  showSummary('Could not generate summary. Please try again.');
   sumBtn.style.opacity = '1';
   sumBtn.style.pointerEvents = 'auto';
   status.textContent = on ? 'Listening…' : 'Tap to start';
