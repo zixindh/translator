@@ -208,35 +208,45 @@ async function doSummarize() {{
   sumBtn.style.pointerEvents = 'none';
   status.textContent = 'Summarizing…';
 
-  const models = ["google/gemma-3-27b-it:free", "google/gemma-3n-e4b-it:free"];
-  const body = {{
-    messages: [
-      {{ role: "system", content: "Summarize the following meeting notes concisely. Keep full context and key points. Be brief and clear. Output only the summary, no preamble." }},
-      {{ role: "user", content: lines.join('\\n') }}
-    ],
-    max_tokens: 512
+  /* Try backup first (more available), then primary */
+  const models = ["google/gemma-3n-e4b-it:free", "google/gemma-3-27b-it:free"];
+  const msgs = [
+    {{ role: "system", content: "Summarize the following meeting notes concisely. Keep full context and key points. Be brief and clear. Output only the summary, no preamble." }},
+    {{ role: "user", content: lines.join('\\n') }}
+  ];
+  const hdrs = {{
+    "Authorization": "Bearer " + API_KEY,
+    "Content-Type": "application/json",
+    "HTTP-Referer": window.location.href,
+    "X-Title": "Translator"
   }};
 
   for (const model of models) {{
-    try {{
-      const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {{
-        method: "POST",
-        headers: {{ "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" }},
-        body: JSON.stringify({{ ...body, model }})
-      }});
-      const d = await r.json();
-      if (d.choices && d.choices[0]) {{
-        summaryText = d.choices[0].message.content.trim();
-        showSummary(summaryText);
-        sumBtn.style.opacity = '1';
-        sumBtn.style.pointerEvents = 'auto';
-        status.textContent = on ? 'Listening…' : 'Tap to start';
-        return;
-      }}
-    }} catch(e) {{ continue; }}
+    for (let attempt = 0; attempt < 2; attempt++) {{
+      try {{
+        const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {{
+          method: "POST",
+          headers: hdrs,
+          body: JSON.stringify({{ model, messages: msgs, max_tokens: 512 }})
+        }});
+        if (r.status === 429) {{
+          await new Promise(ok => setTimeout(ok, 2000));
+          continue;
+        }}
+        const d = await r.json();
+        if (d.choices && d.choices[0]) {{
+          summaryText = d.choices[0].message.content.trim();
+          showSummary(summaryText);
+          sumBtn.style.opacity = '1';
+          sumBtn.style.pointerEvents = 'auto';
+          status.textContent = on ? 'Listening…' : 'Tap to start';
+          return;
+        }}
+      }} catch(e) {{ break; }}
+    }}
   }}
 
-  showSummary('Could not generate summary.');
+  showSummary('Could not generate summary. Please try again.');
   sumBtn.style.opacity = '1';
   sumBtn.style.pointerEvents = 'auto';
   status.textContent = on ? 'Listening…' : 'Tap to start';
