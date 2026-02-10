@@ -19,39 +19,29 @@ components.html("""
   * { margin:0; padding:0; box-sizing:border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
 
-  .header { display:flex; align-items:center; gap:0.5rem; margin-bottom:1rem; }
-  .header h3 { font-size:1.2rem; color:#1a1a2e; }
+  /* Layout: header top, log middle, mic bottom */
+  .wrap { display:flex; flex-direction:column; height:92vh; }
 
-  #mic {
-    width:48px; height:48px; border-radius:50%; border:none;
-    background:#eee; color:#666; font-size:1.3rem;
-    cursor:pointer; transition:all 0.2s; display:block; margin:0 auto 0.6rem;
+  /* Header with title left, export icon right */
+  .bar {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 0.2rem 0.6rem; flex-shrink:0;
   }
-  #mic.on {
-    background:#ef4444; color:#fff;
-    box-shadow: 0 0 0 4px rgba(239,68,68,0.2);
-    animation: pulse 1.5s infinite;
+  .bar h3 { font-size:1.15rem; color:#1a1a2e; display:flex; align-items:center; gap:0.4rem; }
+  #exportBtn {
+    display:none; background:none; border:none; cursor:pointer;
+    color:#999; transition:color 0.2s; padding:4px;
   }
-  @keyframes pulse {
-    0%,100% { box-shadow:0 0 0 4px rgba(239,68,68,0.2); }
-    50%     { box-shadow:0 0 0 10px rgba(239,68,68,0.05); }
-  }
+  #exportBtn:hover { color:#4A90D9; }
+  #exportBtn svg { width:20px; height:20px; }
 
-  #status {
-    text-align:center; font-size:0.7rem; color:#aaa;
-    margin-bottom:0.8rem; letter-spacing:0.03em;
-  }
-
-  /* Live interim text */
-  #live {
-    color:#999; font-style:italic; font-size:0.95rem;
-    padding:0 0.2rem; min-height:1.2rem; margin-bottom:0.4rem;
-  }
+  /* Scrollable log area */
+  #log { flex:1; overflow-y:auto; padding:0 0.2rem 0.5rem; }
 
   /* Finalized entries */
   .line {
     background:#f7f8fa; border-left:3px solid #4A90D9;
-    border-radius:6px; padding:0.7rem 1rem; margin:0.35rem 0;
+    border-radius:6px; padding:0.6rem 0.9rem; margin:0.3rem 0;
     font-size:1.05rem; line-height:1.6; color:#1a1a2e;
     animation: fadeIn 0.25s ease;
   }
@@ -60,43 +50,81 @@ components.html("""
     to   { opacity:1; transform:translateY(0); }
   }
 
-  #log { max-height:65vh; overflow-y:auto; padding-bottom:0.5rem; }
-
-  /* Export button */
-  #exportBtn {
-    display:none; margin:0.5rem auto 0; padding:0.4rem 1.2rem;
-    background:#4A90D9; color:#fff; border:none; border-radius:6px;
-    font-size:0.8rem; font-weight:600; cursor:pointer;
-    transition:background 0.2s;
+  /* Live interim text */
+  #live {
+    color:#999; font-style:italic; font-size:0.95rem;
+    padding:0 0.2rem; min-height:1rem; flex-shrink:0;
   }
-  #exportBtn:hover { background:#3a7bc8; }
 
-  /* Export card rendered offscreen for download */
+  /* Bottom mic area */
+  .bottom { flex-shrink:0; text-align:center; padding:0.6rem 0 0.3rem; }
+  #mic {
+    width:52px; height:52px; border-radius:50%; border:none;
+    background:#eee; cursor:pointer; transition:all 0.2s;
+    display:inline-flex; align-items:center; justify-content:center;
+  }
+  #mic svg { width:22px; height:22px; fill:#666; }
+  #mic.on {
+    background:#ef4444;
+    box-shadow: 0 0 0 4px rgba(239,68,68,0.2);
+    animation: pulse 1.5s infinite;
+  }
+  #mic.on svg { fill:#fff; }
+  @keyframes pulse {
+    0%,100% { box-shadow:0 0 0 4px rgba(239,68,68,0.2); }
+    50%     { box-shadow:0 0 0 10px rgba(239,68,68,0.05); }
+  }
+  #status { font-size:0.65rem; color:#aaa; margin-top:0.3rem; letter-spacing:0.03em; }
+
+  /* Export card (offscreen for image render) */
   .export-card {
     width:560px; padding:2rem 2.5rem; background:#fff;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   }
   .export-card .ex-title {
     font-size:1.1rem; font-weight:700; color:#1a1a2e;
-    margin-bottom:1.2rem; display:flex; align-items:center; gap:0.4rem;
+    margin-bottom:1rem; display:flex; align-items:center; gap:0.4rem;
   }
   .export-card .ex-line {
     background:#f7f8fa; border-left:3px solid #4A90D9;
-    border-radius:5px; padding:0.55rem 0.9rem; margin:0.3rem 0;
+    border-radius:5px; padding:0.5rem 0.9rem; margin:0.25rem 0;
     font-size:0.95rem; line-height:1.5; color:#1a1a2e;
   }
   .export-card .ex-footer {
-    margin-top:1.2rem; text-align:right;
-    font-size:0.7rem; color:#aaa; letter-spacing:0.02em;
+    margin-top:1rem; text-align:right;
+    font-size:0.7rem; color:#aaa;
   }
 </style>
 
-<div class="header"><span style="font-size:1.3rem">🌐</span><h3>Translator</h3></div>
-<button id="mic" onclick="toggle()">🎤</button>
-<div id="status">Tap to start</div>
-<div id="live"></div>
-<div id="log"></div>
-<button id="exportBtn" onclick="exportCard()">Export</button>
+<div class="wrap">
+  <!-- Top bar: title + export -->
+  <div class="bar">
+    <h3><span>🌐</span> Translator</h3>
+    <button id="exportBtn" onclick="exportCard()" title="Export as image">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- Scrollable transcript log -->
+  <div id="log"></div>
+  <div id="live"></div>
+
+  <!-- Bottom mic -->
+  <div class="bottom">
+    <button id="mic" onclick="toggle()">
+      <svg viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 14a3 3 0 003-3V5a3 3 0 00-6 0v6a3 3 0 003 3z"/>
+        <path d="M19 11a7 7 0 01-14 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <line x1="12" y1="18" x2="12" y2="22" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </button>
+    <div id="status">Tap to start</div>
+  </div>
+</div>
 
 <script>
 const mic    = document.getElementById('mic');
