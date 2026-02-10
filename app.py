@@ -21,23 +21,26 @@ API_KEY = st.secrets.get("OPENROUTER_API_KEY", os.environ.get("OPENROUTER_API_KE
 
 def summarize(text: str) -> str:
     """Summarize text using OpenRouter free model."""
-    try:
-        r = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"},
-            json={
-                "model": "openrouter/aurora-alpha",
-                "messages": [
-                    {"role": "system", "content": "Summarize the following meeting notes concisely. Keep full context and key points. Be brief and clear. Output only the summary, no preamble."},
-                    {"role": "user", "content": text}
-                ],
-                "max_tokens": 512
-            },
-            timeout=15
-        )
-        return r.json()["choices"][0]["message"]["content"].strip()
-    except Exception as e:
-        return f"Error: {e}"
+    headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
+    prompt = [
+        {"role": "system", "content": "Summarize the following meeting notes concisely. Keep full context and key points. Be brief and clear. Output only the summary, no preamble."},
+        {"role": "user", "content": text}
+    ]
+    # Try primary model, fall back to backup
+    for model in ["google/gemma-3-27b-it:free", "google/gemma-3n-e4b-it:free"]:
+        try:
+            r = requests.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers=headers,
+                json={"model": model, "messages": prompt, "max_tokens": 512},
+                timeout=20
+            )
+            data = r.json()
+            if "choices" in data:
+                return data["choices"][0]["message"]["content"].strip()
+        except Exception:
+            continue
+    return "Could not generate summary."
 
 # Handle summarization request from client via query params
 params = st.query_params
