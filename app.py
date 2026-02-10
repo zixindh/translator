@@ -19,8 +19,8 @@ components.html("""
   * { margin:0; padding:0; box-sizing:border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
 
-  /* Layout: header top, log middle, mic bottom */
-  .wrap { display:flex; flex-direction:column; height:92vh; }
+  /* Layout: header top, log middle, mic pinned bottom */
+  .wrap { display:flex; flex-direction:column; height:640px; }
 
   /* Header with title left, export icon right */
   .bar {
@@ -170,7 +170,9 @@ function addLine(text) {
   exportBtn.style.display = 'block';
 }
 
-/* Export as image — uses Web Share API on iPhone (saves to Photos), file download on desktop */
+/* Export: render image → open in new tab.
+   iPhone: long-press the image → "Add to Photos".
+   Desktop: right-click → "Save image as". */
 async function exportCard() {
   const card = document.createElement('div');
   card.className = 'export-card';
@@ -180,7 +182,6 @@ async function exportCard() {
     '<div class="ex-footer">' + new Date().toLocaleString() + '</div>';
   document.body.appendChild(card);
 
-  /* Load html2canvas if not already loaded */
   if (!window.html2canvas) {
     await new Promise(resolve => {
       const s = document.createElement('script');
@@ -192,22 +193,22 @@ async function exportCard() {
 
   const canvas = await html2canvas(card, { scale: 2, backgroundColor: '#fff' });
   document.body.removeChild(card);
+  const dataUrl = canvas.toDataURL('image/png');
 
-  /* Convert canvas to blob */
-  const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
-  const file = new File([blob], 'translator.png', { type: 'image/png' });
-
-  /* iPhone/mobile: Web Share API opens share sheet → Save Image */
-  if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    try { await navigator.share({ files: [file] }); return; } catch {}
-  }
-
-  /* Desktop fallback: direct download */
-  const a = document.createElement('a');
-  a.download = 'translator-' + Date.now() + '.png';
-  a.href = URL.createObjectURL(blob);
-  a.click();
-  URL.revokeObjectURL(a.href);
+  /* Open image in new tab — user can long-press to save to Photos (iPhone)
+     or right-click to save (desktop) */
+  const w = window.open('', '_blank');
+  w.document.write(
+    '<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width">' +
+    '<title>Translator Export</title>' +
+    '<style>body{margin:0;display:flex;justify-content:center;align-items:start;' +
+    'min-height:100vh;background:#f0f0f0;padding:1rem;}' +
+    'img{max-width:100%;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,0.1);}' +
+    'p{text-align:center;color:#999;font:0.75rem -apple-system,sans-serif;margin-top:0.8rem;}</style>' +
+    '</head><body><div><img src="' + dataUrl + '"/>' +
+    '<p>Long-press image to save to Photos</p></div></body></html>'
+  );
+  w.document.close();
 }
 
 /* Build speech recognition instance */
